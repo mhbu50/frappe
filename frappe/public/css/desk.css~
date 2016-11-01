@@ -637,8 +637,8 @@ fieldset[disabled] .form-control {
 }
 @font-face {
     font-family: "B Baran";
-    src: url("BBaran.woff") format("woff"),
-     url("BBaran.ttf") format("truetype");
+    src: url("BBaran.eot?") format("eot"), url("BBaran.woff") format("woff"),
+     url("BBaran.ttf") format("truetype"), url("BBaran.svg#BBaran") format("svg");
     font-weight: normal;
     font-style: normal;
 }

@@ -53,11 +53,7 @@
 		"public/css/tree.css",
 		"public/css/desktop.css",
 		"public/css/form.css",
-		"public/css/mobile.css",
-		"public/css/BBaran.woff",
-		"public/css/BBaran.ttf",
-		"public/css/BBaran.svg",
-		"public/css/BBaran.eot"
+		"public/css/mobile.css"
 	],
 	"js/libs.min.js": [
 		"public/js/lib/jquery/jquery-ui.min.js",

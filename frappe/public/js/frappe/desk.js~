@@ -257,9 +257,7 @@ frappe.Application = Class.extend({
 
 	set_rtl: function () {
 		if (["ar", "he"].indexOf(frappe.boot.lang) >= 0) {
-			$('body').addClass('frappe-rtl');
-		        $("*").css('fontFamily', "B Baran");
-
+			$('body').addClass('frappe-rtl')
 		}
 	},
 
