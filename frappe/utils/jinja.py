@@ -22,6 +22,22 @@ def get_jenv():
 def get_template(path):
 	return get_jenv().get_template(path)
 
+def get_email_from_template(name, args):
+	from jinja2 import TemplateNotFound
+
+	args = args or {}
+	try:
+		message = get_template('templates/emails/' + name + '.html').render(args)
+	except TemplateNotFound:
+		message = None
+
+	try:
+		text_content = get_template('templates/emails/' + name + '.txt').render(args)
+	except TemplateNotFound:
+		text_content = None
+
+	return (message, text_content)
+
 def validate_template(html):
 	"""Throws exception if there is a syntax error in the Jinja Template"""
 	import frappe
@@ -30,7 +46,7 @@ def validate_template(html):
 	jenv = get_jenv()
 	try:
 		jenv.from_string(html)
-	except TemplateSyntaxError, e:
+	except TemplateSyntaxError as e:
  		frappe.msgprint('Line {}: {}'.format(e.lineno, e.message))
 		frappe.throw(frappe._("Syntax error in template"))
 
@@ -40,6 +56,9 @@ def render_template(template, context, is_path=None):
 	:param template: path or HTML containing the jinja template
 	:param context: dict of properties to pass to the template
 	:param is_path: (optional) assert that the `template` parameter is a path'''
+
+	if not template:
+		return ""
 
 	# if it ends with .html then its a freaking path, not html
 	if (is_path
@@ -102,10 +121,11 @@ def get_allowed_functions_for_jenv():
 			"user": user,
 			"get_fullname": frappe.utils.get_fullname,
 			"get_gravatar": frappe.utils.get_gravatar_url,
-			"full_name": getattr(frappe.local, "session", None) and frappe.local.session.data.full_name or "Guest",
+			"full_name": frappe.local.session.data.full_name if getattr(frappe.local, "session", None) else "Guest",
 			"render_template": frappe.render_template,
 			'session': {
-				'user': user
+				'user': user,
+				'csrf_token': frappe.local.session.data.csrf_token if getattr(frappe.local, "session", None) else ''
 			},
 		},
 		"autodoc": {

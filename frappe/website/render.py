@@ -7,6 +7,8 @@ from frappe import _
 import frappe.sessions
 from frappe.utils import cstr
 import mimetypes, json
+
+from six import iteritems
 from werkzeug.wrappers import Response
 from werkzeug.routing import Map, Rule, NotFound
 
@@ -30,10 +32,10 @@ def render(path=None, http_status_code=None):
 	else:
 		try:
 			data = render_page_by_language(path)
-		except frappe.DoesNotExistError, e:
+		except frappe.DoesNotExistError as e:
 			doctype, name = get_doctype_from_path(path)
 			if doctype and name:
-				path = "print"
+				path = "printview"
 				frappe.local.form_dict.doctype = doctype
 				frappe.local.form_dict.name = name
 			elif doctype:
@@ -48,13 +50,13 @@ def render(path=None, http_status_code=None):
 			if not data:
 				try:
 					data = render_page(path)
-				except frappe.PermissionError, e:
+				except frappe.PermissionError as e:
 					data, http_status_code = render_403(e, path)
 
-		except frappe.PermissionError, e:
+		except frappe.PermissionError as e:
 			data, http_status_code = render_403(e, path)
 
-		except frappe.Redirect, e:
+		except frappe.Redirect as e:
 			return build_response(path, "", 301, {
 				"Location": frappe.flags.redirect_location or (frappe.local.response or {}).get('location'),
 				"Cache-Control": "no-store, no-cache, must-revalidate"
@@ -78,7 +80,7 @@ def build_response(path, data, http_status_code, headers=None):
 	response.headers[b"X-From-Cache"] = frappe.local.response.from_cache or False
 
 	if headers:
-		for key, val in headers.iteritems():
+		for key, val in iteritems(headers):
 			response.headers[bytes(key)] = val.encode("utf-8")
 
 	return response

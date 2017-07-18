@@ -16,6 +16,7 @@ Example:
 '''
 
 from __future__ import unicode_literals, print_function
+from six.moves import range
 import frappe, json, os
 from frappe.utils import cstr, cint
 from frappe.model import default_fields, no_value_fields, optional_fields
@@ -27,7 +28,10 @@ from frappe import _
 
 def get_meta(doctype, cached=True):
 	if cached:
-		return frappe.cache().hget("meta", doctype, lambda: Meta(doctype))
+		if not frappe.local.meta_cache.get(doctype):
+			frappe.local.meta_cache[doctype] = frappe.cache().hget("meta", doctype,
+				lambda: Meta(doctype))
+		return frappe.local.meta_cache[doctype]
 	else:
 		return Meta(doctype)
 
@@ -230,7 +234,7 @@ class Meta(Document):
 			self.extend("fields", frappe.db.sql("""SELECT * FROM `tabCustom Field`
 				WHERE dt = %s AND docstatus < 2""", (self.name,), as_dict=1,
 				update={"is_custom_field": 1}))
-		except Exception, e:
+		except Exception as e:
 			if e.args[0]==1146:
 				return
 			else:
@@ -281,7 +285,7 @@ class Meta(Document):
 			newlist += [df for df in self.get('fields') if not df.get('is_custom_field')]
 
 			newlist_fieldnames = [df.fieldname for df in newlist]
-			for i in xrange(2):
+			for i in range(2):
 				for df in list(custom_fields):
 					if df.insert_after in newlist_fieldnames:
 						cf = custom_fields.pop(custom_fields.index(df))
@@ -385,7 +389,7 @@ def is_single(doctype):
 	try:
 		return frappe.db.get_value("DocType", doctype, "issingle")
 	except IndexError:
-		raise Exception, 'Cannot determine whether %s is single' % doctype
+		raise Exception('Cannot determine whether %s is single' % doctype)
 
 def get_parent_dt(dt):
 	parent_dt = frappe.db.sql("""select parent from tabDocField
@@ -468,7 +472,7 @@ def get_default_df(fieldname):
 def trim_tables(doctype=None):
 	"""Use this to remove columns that don't exist in meta"""
 	ignore_fields = default_fields + optional_fields
-	
+
 	filters={ "issingle": 0 }
 	if doctype:
 		filters["name"] = doctype
@@ -488,6 +492,9 @@ def trim_tables(doctype=None):
 
 def clear_cache(doctype=None):
 	cache = frappe.cache()
+
+	if getattr(frappe.local, 'meta_cache') and (doctype in frappe.local.meta_cache):
+		del frappe.local.meta_cache[doctype]
 
 	for key in ('is_table', 'doctype_modules'):
 		cache.delete_value(key)

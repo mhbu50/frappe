@@ -48,7 +48,7 @@ def update_controller_context(context, controller):
 					context.update(ret)
 			except frappe.Redirect:
 				raise
-			except frappe.PermissionError:
+			except (frappe.PermissionError, frappe.DoesNotExistError):
 				raise
 			except:
 				if not frappe.flags.in_migrate:
@@ -123,11 +123,19 @@ def build_context(context):
 		app_base = frappe.get_hooks("base_template")
 		context.base_template_path = app_base[0] if app_base else "templates/base.html"
 
+	if context.title_prefix and context.title and not context.title.startswith(context.title_prefix):
+		context.title = '{0} - {1}'.format(context.title_prefix, context.title)
+
 	return context
 
 def add_sidebar_data(context):
 	from frappe.utils.user import get_fullname_and_avatar
 	import frappe.www.list
+
+	if context.show_sidebar and context.website_sidebar:
+		context.sidebar_items = frappe.get_all('Website Sidebar Item',
+			filters=dict(parent=context.website_sidebar), fields=['title', 'route', '`group`'],
+			order_by='idx asc')
 
 	if not context.sidebar_items:
 		sidebar_items = frappe.cache().hget('portal_menu_items', frappe.session.user)

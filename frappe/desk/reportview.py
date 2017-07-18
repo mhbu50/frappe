@@ -5,6 +5,7 @@ from __future__ import unicode_literals
 """build query for doclistview and return results"""
 
 import frappe, json
+from six.moves import range
 import frappe.permissions
 import MySQLdb
 from frappe.model.db_query import DatabaseQuery
@@ -26,6 +27,8 @@ def get_form_params():
 	data = frappe._dict(frappe.local.form_dict)
 
 	del data["cmd"]
+	if "csrf_token" in data:
+		del data["csrf_token"]
 
 	if isinstance(data.get("filters"), basestring):
 		data["filters"] = json.loads(data["filters"])
@@ -173,7 +176,7 @@ def append_totals_row(data):
 	totals.extend([""]*len(data[0]))
 
 	for row in data:
-		for i in xrange(len(row)):
+		for i in range(len(row)):
 			if isinstance(row[i], (float, int)):
 				totals[i] = (totals[i] or 0) + row[i]
 	data.append(totals)
@@ -331,8 +334,11 @@ def build_match_conditions(doctype, as_condition=True):
 	else:
 		return match_conditions
 
-def get_filters_cond(doctype, filters, conditions, ignore_permissions=None):
+def get_filters_cond(doctype, filters, conditions, ignore_permissions=None, with_match_conditions=False):
 	if filters:
+		if isinstance(filters, basestring):
+			filters = json.loads(filters)
+
 		flt = filters
 		if isinstance(filters, dict):
 			filters = filters.items()
@@ -347,6 +353,10 @@ def get_filters_cond(doctype, filters, conditions, ignore_permissions=None):
 		query = DatabaseQuery(doctype)
 		query.filters = flt
 		query.conditions = conditions
+
+		if with_match_conditions:
+			query.build_match_conditions()
+
 		query.build_filter_conditions(flt, conditions, ignore_permissions)
 
 		cond = ' and ' + ' and '.join(query.conditions)

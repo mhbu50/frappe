@@ -43,6 +43,7 @@ type_map = {
 	,'Attach':		('text', '')
 	,'Attach Image':('text', '')
 	,'Signature':	('longtext', '')
+	,'Color':		('varchar', varchar_len)
 }
 
 default_columns = ['name', 'creation', 'modified', 'modified_by', 'owner',
@@ -60,7 +61,7 @@ def updatedb(dt, meta=None):
 	"""
 	res = frappe.db.sql("select issingle from tabDocType where name=%s", (dt,))
 	if not res:
-		raise Exception, 'Wrong doctype "%s" in updatedb' % dt
+		raise Exception('Wrong doctype "%s" in updatedb' % dt)
 
 	if not res[0][0]:
 		tab = DbTable(dt, 'tab', meta)
@@ -118,7 +119,7 @@ class DbTable:
 					max_length = frappe.db.sql("""select max(char_length(`{fieldname}`)) from `tab{doctype}`"""\
 						.format(fieldname=col.fieldname, doctype=self.doctype))
 
-				except MySQLdb.OperationalError, e:
+				except MySQLdb.OperationalError as e:
 					if e.args[0]==1054:
 						# Unknown column 'column_name' in 'field list'
 						continue
@@ -307,7 +308,7 @@ class DbTable:
 			if not frappe.db.sql("show index from `%s` where key_name = %s" %
 					(self.name, '%s'), col.fieldname):
 				query.append("add index `{}`(`{}`)".format(col.fieldname, col.fieldname))
-		
+
 		for col in self.drop_index:
 			if col.fieldname != 'name': # primary key
 				# if index key exists
@@ -337,7 +338,7 @@ class DbTable:
 		if query:
 			try:
 				frappe.db.sql("alter table `{}` {}".format(self.name, ", ".join(query)))
-			except Exception, e:
+			except Exception as e:
 				# sanitize
 				if e.args[0]==1060:
 					frappe.throw(str(e))
@@ -504,7 +505,7 @@ class DbManager:
 			host = self.get_current_host()
 		try:
 			self.db.sql("DROP USER '%s'@'%s';" % (target, host))
-		except Exception, e:
+		except Exception as e:
 			if e.args[0]==1396:
 				pass
 			else:
@@ -563,6 +564,13 @@ def validate_column_name(n):
 		frappe.throw(_("Fieldname {0} cannot have special characters like {1}").format(cstr(n), special_characters), InvalidColumnName)
 	return n
 
+def validate_column_length(fieldname):
+	""" In MySQL maximum column length is 64 characters,
+		ref: https://dev.mysql.com/doc/refman/5.5/en/identifiers.html"""
+
+	if len(fieldname) > 64:
+		frappe.throw(_("Fieldname is limited to 64 characters ({0})").format(fieldname))
+
 def remove_all_foreign_keys():
 	frappe.db.sql("set foreign_key_checks = 0")
 	frappe.db.commit()
@@ -570,7 +578,7 @@ def remove_all_foreign_keys():
 		dbtab = DbTable(t[0])
 		try:
 			fklist = dbtab.get_foreign_keys()
-		except Exception, e:
+		except Exception as e:
 			if e.args[0]==1146:
 				fklist = []
 			else:

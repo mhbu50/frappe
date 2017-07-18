@@ -236,7 +236,7 @@ def remove_all(dt, dn, from_delete=False):
 		for fid in frappe.db.sql_list("""select name from `tabFile` where
 			attached_to_doctype=%s and attached_to_name=%s""", (dt, dn)):
 			remove_file(fid, dt, dn, from_delete)
-	except Exception, e:
+	except Exception as e:
 		if e.args[0]!=1054: raise # (temp till for patched)
 
 def remove_file_by_url(file_url, doctype=None, name=None):
@@ -350,3 +350,22 @@ def get_file_name(fname, optional_suffix):
 			partial, extn = f[0], "." + f[1]
 		return '{partial}{suffix}{extn}'.format(partial=partial, extn=extn, suffix=optional_suffix)
 	return fname
+
+@frappe.whitelist()
+def download_file(file_url):
+	"""
+	Download file using token and REST API. Valid session or
+	token is required to download private files.
+
+	Method : GET
+	Endpoint : frappe.utils.file_manager.download_file
+	URL Params : file_name = /path/to/file relative to site path
+	"""
+	file_doc = frappe.get_doc("File", {"file_url":file_url})
+	file_doc.check_permission("read")
+
+	with open(getattr(frappe.local, "site_path", None) + file_url, "rb") as fileobj:
+		filedata = fileobj.read()
+	frappe.local.response.filename = file_url[file_url.rfind("/")+1:]
+	frappe.local.response.filecontent = filedata
+	frappe.local.response.type = "download"

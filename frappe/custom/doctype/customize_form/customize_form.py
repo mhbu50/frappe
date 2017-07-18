@@ -68,6 +68,8 @@ allowed_fieldtype_change = (('Currency', 'Float', 'Percent'), ('Small Text', 'Da
 	('Text', 'Data'), ('Text', 'Text Editor', 'Code', 'Signature'), ('Data', 'Select'),
 	('Text', 'Small Text'))
 
+allowed_fieldtype_for_options_change = ('Read Only', 'HTML', 'Select',)
+
 class CustomizeForm(Document):
 	def on_update(self):
 		frappe.db.sql("delete from tabSingles where doctype='Customize Form'")
@@ -197,6 +199,10 @@ class CustomizeForm(Document):
 						frappe.msgprint(_("You cannot unset 'Read Only' for field {0}").format(df.label))
 						continue
 
+					elif property == "options" and df.get("fieldtype") not in allowed_fieldtype_for_options_change:
+						frappe.msgprint(_("You can't set 'Options' for field {0}").format(df.label))
+						continue
+
 					self.make_property_setter(property=property, value=df.get(property),
 						property_type=docfield_properties[property], fieldname=df.fieldname)
 
@@ -301,7 +307,7 @@ class CustomizeForm(Document):
 		else:
 			try:
 				property_value = frappe.db.get_value("DocType", self.doc_type, property_name)
-			except Exception, e:
+			except Exception as e:
 				if e.args[0]==1054:
 					property_value = None
 				else:
