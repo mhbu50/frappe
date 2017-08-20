@@ -17,6 +17,7 @@ from frappe.utils.file_manager import save_url
 
 from frappe.utils import cint, cstr, flt, getdate, get_datetime, get_url
 from frappe.core.page.data_import_tool.data_import_tool import get_data_keys
+from six import text_type, string_types
 
 @frappe.whitelist()
 def upload(rows = None, submit_after_import=None, ignore_encoding_errors=False, no_email=True, overwrite=None,
@@ -118,7 +119,8 @@ def upload(rows = None, submit_after_import=None, ignore_encoding_errors=False, 
 								elif fieldtype in ("Float", "Currency", "Percent"):
 									d[fieldname] = flt(d[fieldname])
 								elif fieldtype == "Date":
-									d[fieldname] = getdate(parse_date(d[fieldname])) if d[fieldname] else None
+									if d[fieldname] and isinstance(d[fieldname], string_types):
+										d[fieldname] = getdate(parse_date(d[fieldname]))
 								elif fieldtype == "Datetime":
 									if d[fieldname]:
 										if " " in d[fieldname]:
@@ -133,6 +135,11 @@ def upload(rows = None, submit_after_import=None, ignore_encoding_errors=False, 
 								elif fieldtype in ("Image", "Attach Image", "Attach"):
 									# added file to attachments list
 									attachments.append(d[fieldname])
+
+								elif fieldtype in ("Link", "Dynamic Link") and d[fieldname]:
+									# as fields can be saved in the number format(long type) in data import template
+									d[fieldname] = cstr(d[fieldname])
+
 							except IndexError:
 								pass
 
@@ -302,7 +309,7 @@ def upload(rows = None, submit_after_import=None, ignore_encoding_errors=False, 
 				doc = parent.append(parentfield, doc)
 				parent.save()
 				log('Inserted row for %s at #%s' % (as_link(parenttype,
-					doc.parent), unicode(doc.idx)))
+					doc.parent),text_type(doc.idx)))
 			else:
 				if overwrite and doc["name"] and frappe.db.exists(doctype, doc["name"]):
 					original = frappe.get_doc(doctype, doc["name"])

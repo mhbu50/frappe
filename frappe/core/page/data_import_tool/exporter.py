@@ -10,6 +10,7 @@ import re, csv, os
 from frappe.utils.csvutils import UnicodeWriter
 from frappe.utils import cstr, formatdate, format_datetime
 from  frappe.core.page.data_import_tool.data_import_tool import get_data_keys
+from six import string_types
 
 reflags = {
 	"I":re.I,
@@ -29,7 +30,7 @@ def get_template(doctype=None, parent_doctype=None, all_doctypes="No", with_data
 		select_columns = json.loads(select_columns);
 	docs_to_export = {}
 	if doctype:
-		if isinstance(doctype, basestring):
+		if isinstance(doctype, string_types):
 			doctype = [doctype];
 		if len(doctype) > 1:
 			docs_to_export = doctype[1]
@@ -284,7 +285,7 @@ def get_template(doctype=None, parent_doctype=None, all_doctypes="No", with_data
 	if from_data_import == "Yes" and excel_format == "Yes":
 		filename = frappe.generate_hash("", 10)
 		with open(filename, 'wb') as f:
-		    f.write(cstr(w.getvalue()).encode("utf-8"))
+			f.write(cstr(w.getvalue()).encode("utf-8"))
 		f = open(filename)
 		reader = csv.reader(f)
 

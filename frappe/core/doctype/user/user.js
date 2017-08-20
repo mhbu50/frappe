@@ -59,8 +59,12 @@ frappe.ui.form.on('User', {
 					frappe.route_options = {
 						"user": doc.name
 					};
-					frappe.set_route("user-permissions");
+					frappe.set_route('List', 'User Permission');
 				}, null, "btn-default")
+
+				frm.add_custom_button(__('View Permitted Documents'),
+					() => frappe.set_route('query-report', 'Permitted Documents For User',
+						{user: frm.doc.name}));
 
 				frm.toggle_display(['sb1', 'sb3', 'modules_access'], true);
 			}
@@ -68,6 +72,15 @@ frappe.ui.form.on('User', {
 			frm.add_custom_button(__("Reset Password"), function() {
 				frappe.call({
 					method: "frappe.core.doctype.user.user.reset_password",
+					args: {
+						"user": frm.doc.name
+					}
+				})
+			})
+
+			frm.add_custom_button(__("Reset OTP Secret"), function() {
+				frappe.call({
+					method: "frappe.core.doctype.user.user.reset_otp_secret",
 					args: {
 						"user": frm.doc.name
 					}
@@ -107,6 +120,7 @@ frappe.ui.form.on('User', {
 			}
 			cur_frm.dirty();
 		}
+
 	},
 	validate: function(frm) {
 		if(frm.roles_editor) {

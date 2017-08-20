@@ -110,7 +110,6 @@ def before_tests():
 			"timezone"			:"America/New_York",
 			"currency"			:"USD"
 		})
-	enable_all_roles_and_domains()
 
 	frappe.db.commit()
 	frappe.clear_cache()
@@ -125,6 +124,8 @@ def import_country_and_currency():
 		update_progress_bar("Updating country info", i, len(data))
 		country = frappe._dict(data[name])
 		add_country_and_currency(name, country)
+
+	print("")
 
 	# enable frequently used currencies
 	for currency in ("INR", "USD", "GBP", "EUR", "AED", "AUD", "JPY", "CNY", "CHF"):
@@ -152,25 +153,3 @@ def add_country_and_currency(name, country):
 			"number_format": country.number_format,
 			"docstatus": 0
 		}).db_insert()
-
-def enable_all_roles_and_domains():
-	""" enable all roles and domain for testing """
-	roles = frappe.get_list("Role", filters={"disabled": 1})
-	for role in roles:
-		_role = frappe.get_doc("Role", role.get("name"))
-		_role.disabled = 0
-		_role.flags.ignore_mandatory = True
-		_role.flags.ignore_permissions = True
-		_role.save()
-
-	domains = frappe.get_list("Domain")
-	if not domains:
-		return
-
-	domain_settigns = frappe.get_doc("Domain Settings", "Domain Settings")
-	domain_settigns.set("active_domains", [])
-	for domain in domains:
-		row = domain_settigns.append("active_domains", {})
-		row.domain=domain.get("name")
-
-	domain_settigns.save()

@@ -54,14 +54,17 @@ frappe.tests = {
 		// build tasks for each row
 		value.forEach(d => {
 			grid_row_tasks.push(() => {
-				grid.add_new_row();
-				let grid_row = grid.get_row(-1).toggle_view(true);
+
 				let grid_value_tasks = [];
+				grid_value_tasks.push(() => grid.add_new_row());
+				grid_value_tasks.push(() => grid.get_row(-1).toggle_view(true));
+				grid_value_tasks.push(() => frappe.timeout(0.5));
 
 				// build tasks to set each row value
 				d.forEach(child_value => {
 					for (let child_key in child_value) {
 						grid_value_tasks.push(() => {
+							let grid_row = grid.get_row(-1);
 							return frappe.model.set_value(grid_row.doc.doctype,
 								grid_row.doc.name, child_key, child_value[child_key]);
 						});
@@ -100,57 +103,6 @@ frappe.tests = {
 				return frappe.run_serially(tasks);
 			}]);
 	},
-	click_and_wait: (button, obj=0.1) => {
-		return frappe.run_serially([
-			() => {
-				//check if obj value is passed
-				if (obj == 0.1)
-					$(button).click();
-				else
-					$(button)[obj].click();
-			},
-			() => frappe.timeout(0.5)
-		]);
-	},
-	create_todo: (todo_needed) => {
-		let status_list = ['Closed', 'Open'];
-		let priority_list = ['Low', 'Medium', 'High'];
-		let date_list = ['2017-05-05', '2017-06-06', '2017-07-07', '2017-08-08'];
-		let owner_list = ['Administrator', 'user1@mail.com'];
-		let i;
-		let num_of_todo;
-		let tasks = [];
-
-		return frappe.run_serially([
-			() => frappe.set_route('List', 'ToDo', 'List'),
-			() => {
-				//remove todo filters
-				for (i=1; i<=5; i++)
-					$('.col-md-2:nth-child('+i+') .input-sm').val('');
-			},
-			() => cur_list.page.btn_secondary.click(),
-			() => frappe.timeout(0.5),
-			() => num_of_todo = cur_list.data.length,//todo present
-			() => {
-				if (num_of_todo < todo_needed)
-				{
-					for (i=0; i<(todo_needed-num_of_todo); i+=1)
-					{
-						tasks.push(() => frappe.tests.make("ToDo", [
-							{description: 'ToDo for testing'},
-							{status: status_list[i%2]},
-							{priority: priority_list[i%3]},
-							{date: date_list[i%4]},
-							{owner: owner_list[i%2]}
-						]));
-						tasks.push(() => i+=1);
-					}
-					i=0;
-				}
-			},
-			() => frappe.run_serially(tasks)
-		]);
-	},
 	click_page_head_item: (text) => {
 		// Method to items present on the page header like New, Save, Delete etc.
 		let  possible_texts = ["New", "Delete", "Save", "Yes"];
@@ -172,35 +124,8 @@ frappe.tests = {
 		return frappe.run_serially([
 			() => {
 				let li = $(`.dropdown-menu li:contains("${text}"):visible`).get(0);
-				$(li).find(`a`)[0].click();
+				$(li).find(`a`).click();
 			},
-			() => frappe.timeout(1)
-		]);
-	},
-	click_navbar_item: (text) => {
-		// Method to click an elements present on the navbar
-		return frappe.run_serially([
-			() => {
-				if (text == "Help"){
-					$(`.dropdown-help .dropdown-toggle:visible`).click();
-				}
-				else if (text == "navbar_user"){
-					$(`.dropdown-navbar-user .dropdown-toggle:visible`).click();
-				}
-				else if (text == "Notification"){
-					$(`.navbar-new-comments`).click();
-				}
-				else if (text == "Home"){
-					$(`.navbar-home:contains('Home'):visible`)[0].click();
-				}
-			},
-			() => frappe.timeout(1)
-		]);
-	},
-	click_generic_text: (text, tag='a') => {
-		// Method to click an element by its name
-		return frappe.run_serially([
-			() => $(`${tag}:contains("${text}"):visible`)[0].click(),
 			() => frappe.timeout(1)
 		]);
 	},
@@ -215,22 +140,61 @@ frappe.tests = {
 		// Method to check the visibility of an element
 		return $(`${tag}:contains("${text}")`).is(`:visible`);
 	},
-	close_modal: () => {
-		// Close the modal on the screen
-		$(`a.close`).click();
-	},
-	click_print_logo: () => {
-		return frappe.run_serially([
-			() => $(`.fa-print`).click(),
-			() => frappe.timeout(1)
-		]);
-	},
+	/**
+	 * Clicks a button on a form.
+	 * @param {String} text - The button's text
+	 * @return {frappe.timeout}
+	 * @throws will throw an exception if a matching visible button is not found
+	 */
 	click_button: function(text) {
-		$(`.btn:contains("${text}"):visible`).click();
-		return frappe.timeout(1);
+		let element = $(`.btn:contains("${text}"):visible`);
+		if(!element.length) {
+			throw `did not find any button containing ${text}`;
+		}
+		element.click();
+		return frappe.timeout(0.5);
 	},
+	/**
+	 * Clicks a link on a form.
+	 * @param {String} text - The text of the link to be clicked
+	 * @return {frappe.timeout}
+	 * @throws will throw an exception if a link with the given text is not found
+	 */
 	click_link: function(text) {
-		$(`a:contains("${text}"):visible`).click();
-		return frappe.timeout(1);
+		let element = $(`a:contains("${text}"):visible`);
+		if(!element.length) {
+			throw `did not find any link containing ${text}`;
+		}
+		element.get(0).click();
+		return frappe.timeout(0.5);
+	},
+	/**
+	 * Sets the given control to the value given.
+	 * @param {String} fieldname - The Doctype's field name
+	 * @param {String} value - The value the control should be changed to
+	 * @return {frappe.timeout}
+	 * @throws will throw an exception if the field is not found or is not visible
+	 */
+	set_control: function(fieldname, value) {
+		let control = $(`.form-control[data-fieldname="${fieldname}"]:visible`);
+		if(!control.length) {
+			throw `did not find any control with fieldname ${fieldname}`;
+		}
+		control.val(value).trigger('change');
+		return frappe.timeout(0.5);
+	},
+	/**
+	 * Checks if given field is disabled.
+	 * @param {String} fieldname - The Doctype field name
+	 * @return {Boolean} true if condition is met
+	 * @throws will throw an exception if the field is not found or is not a form control
+	 */
+	is_disabled_field: function(fieldname){
+		let control = $(`.form-control[data-fieldname="${fieldname}"]:disabled`);
+		if(!control.length) {
+			throw `did not find any control with fieldname ${fieldname}`;
+		} else {
+			return true;
+		}
 	}
 };

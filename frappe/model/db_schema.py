@@ -127,7 +127,7 @@ class DbTable:
 					else:
 						raise
 
-				if max_length and max_length[0][0] > new_length:
+				if max_length and max_length[0][0] and max_length[0][0] > new_length:
 					current_type = self.current_columns[col.fieldname]["type"]
 					current_length = re.findall('varchar\(([\d]+)\)', current_type)
 					if not current_length:
@@ -314,7 +314,7 @@ class DbTable:
 				# if index key exists
 				if frappe.db.sql("""show index from `{0}`
 					where key_name=%s
-					and Non_unique=%s""".format(self.name), (col.fieldname, 0 if col.unique else 1)):
+					and Non_unique=%s""".format(self.name), (col.fieldname, col.unique)):
 					query.append("drop index `{}`".format(col.fieldname))
 
 		for col in self.set_default:
@@ -464,8 +464,8 @@ class DbManager:
 		"""
 		Pass root_conn here for access to all databases.
 		"""
- 		if db:
- 			self.db = db
+		if db:
+			self.db = db
 
 	def get_current_host(self):
 		return self.db.sql("select user()")[0][0].split('@')[1]

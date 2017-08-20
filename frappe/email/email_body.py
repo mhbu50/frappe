@@ -8,14 +8,14 @@ from frappe.email.smtp import get_outgoing_email_account
 from frappe.utils import (get_url, scrub_urls, strip, expand_relative_urls, cint,
 	split_emails, to_markdown, markdown, encode, random_string, parse_addr)
 import email.utils
-from six import iteritems
+from six import iteritems, text_type, string_types
 from email.mime.multipart import MIMEMultipart
 
 
 def get_email(recipients, sender='', msg='', subject='[No Subject]',
 	text_content = None, footer=None, print_html=None, formatted=None, attachments=None,
 	content=None, reply_to=None, cc=[], email_account=None, expose_recipients=None,
-	inline_images=[], header=False):
+	inline_images=[], header=None):
 	""" Prepare an email with the following format:
 		- multipart/mixed
 			- multipart/alternative
@@ -54,7 +54,7 @@ class EMail:
 		from email import Charset
 		Charset.add_charset('utf-8', Charset.QP, Charset.QP, 'utf-8')
 
-		if isinstance(recipients, basestring):
+		if isinstance(recipients, string_types):
 			recipients = recipients.replace(';', ',').replace('\n', '')
 			recipients = split_emails(recipients)
 
@@ -76,7 +76,7 @@ class EMail:
 		self.email_account = email_account or get_outgoing_email_account()
 
 	def set_html(self, message, text_content = None, footer=None, print_html=None,
-		formatted=None, inline_images=None, header=False):
+		formatted=None, inline_images=None, header=None):
 		"""Attach message in the html portion of multipart/alternative"""
 		if not formatted:
 			formatted = get_formatted_html(self.subject, message, footer, print_html,
@@ -233,12 +233,13 @@ class EMail:
 		self.make()
 		return self.msg_root.as_string()
 
-def get_formatted_html(subject, message, footer=None, print_html=None, email_account=None, header=False):
+def get_formatted_html(subject, message, footer=None, print_html=None,
+		email_account=None, header=None, unsubscribe_link=None):
 	if not email_account:
 		email_account = get_outgoing_email_account(False)
 
 	rendered_email = frappe.get_template("templates/emails/standard.html").render({
-		"header": get_header() if header else None,
+		"header": get_header(header),
 		"content": message,
 		"signature": get_signature(email_account),
 		"footer": get_footer(email_account, footer),
@@ -247,7 +248,41 @@ def get_formatted_html(subject, message, footer=None, print_html=None, email_acc
 		"subject": subject
 	})
 
-	return scrub_urls(rendered_email)
+	html = scrub_urls(rendered_email)
+
+	if unsubscribe_link:
+		html = html.replace("<!--unsubscribe link here-->", unsubscribe_link.html)
+
+	html = inline_style_in_html(html)
+	return html
+
+@frappe.whitelist()
+def get_email_html(template, args, subject, header=None):
+	import json
+
+	args = json.loads(args)
+	if header and header.startswith('['):
+		header = json.loads(header)
+	email = frappe.utils.jinja.get_email_from_template(template, args)
+	return get_formatted_html(subject, email[0], header=header)
+
+def inline_style_in_html(html):
+	''' Convert email.css and html to inline-styled html
+	'''
+	from premailer import Premailer
+
+	apps = frappe.get_installed_apps()
+
+	css_files = []
+	for app in apps:
+		path = 'assets/{0}/css/email.css'.format(app)
+		if os.path.exists(os.path.abspath(path)):
+			css_files.append(path)
+
+	p = Premailer(html=html, external_styles=css_files, strip_important=False)
+
+	return p.transform()
+
 
 def add_attachment(fname, fcontent, content_type=None,
 	parent=None, content_id=None, inline=False):
@@ -272,7 +307,7 @@ def add_attachment(fname, fcontent, content_type=None,
 	maintype, subtype = content_type.split('/', 1)
 	if maintype == 'text':
 		# Note: we should handle calculating the charset
-		if isinstance(fcontent, unicode):
+		if isinstance(fcontent, text_type):
 			fcontent = fcontent.encode("utf-8")
 		part = MIMEText(fcontent, _subtype=subtype, _charset="utf-8")
 	elif maintype == 'image':
@@ -289,7 +324,7 @@ def add_attachment(fname, fcontent, content_type=None,
 	# Set the filename parameter
 	if fname:
 		attachment_type = 'inline' if inline else 'attachment'
-		part.add_header(b'Content-Disposition', attachment_type, filename=fname.encode('utf=8'))
+		part.add_header(b'Content-Disposition', attachment_type, filename=text_type(fname))
 	if content_id:
 		part.add_header(b'Content-ID', '<{0}>'.format(content_id))
 
@@ -311,25 +346,20 @@ def get_footer(email_account, footer=None):
 	"""append a footer (signature)"""
 	footer = footer or ""
 
-	if email_account and email_account.footer:
-		footer += '<div style="margin: 15px auto;">{0}</div>'.format(email_account.footer)
+	args = {}
 
-	footer += "<!--unsubscribe link here-->"
+	if email_account and email_account.footer:
+		args.update({'email_account_footer': email_account.footer})
 
 	company_address = frappe.db.get_default("email_footer_address")
 
 	if company_address:
-		company_address = company_address.splitlines(True)
-		footer += '<table width="100%" border=0>'
-		footer += '<tr><td height=20></td></tr>'
-		for x in company_address:
-			footer += '<tr style="margin: 15px auto; text-align: center; color: #8d99a6"><td>{0}</td></tr>'\
-				.format(x)
-		footer += "</table>"
+		args.update({'company_address': company_address})
 
 	if not cint(frappe.db.get_default("disable_standard_email_footer")):
-		for default_mail_footer in frappe.get_hooks("default_mail_footer"):
-			footer += '<div style="margin: 15px auto;">{0}</div>'.format(default_mail_footer)
+		args.update({'default_mail_footer': frappe.get_hooks('default_mail_footer')})
+
+	footer += frappe.utils.jinja.get_email_from_template('email_footer', args)[0]
 
 	return footer
 
@@ -396,23 +426,27 @@ def get_filecontent_from_path(path):
 		return None
 
 
-def get_header():
+def get_header(header=None):
 	""" Build header from template """
 	from frappe.utils.jinja import get_email_from_template
 
-	default_brand_image = 'assets/frappe/images/favicon.png' # svg doesn't work in email
-	email_brand_image = frappe.get_hooks('email_brand_image')
-	if len(email_brand_image):
-		email_brand_image = email_brand_image[-1]
-	else:
-		email_brand_image = default_brand_image
+	if not header: return None
 
-	email_brand_image = default_brand_image
-	brand_text = frappe.get_hooks('app_title')[-1]
+	if isinstance(header, string_types):
+		# header = 'My Title'
+		header = [header, None]
+	if len(header) == 1:
+		# header = ['My Title']
+		header.append(None)
+	# header = ['My Title', 'orange']
+	title, indicator = header
+
+	if not title:
+		title = frappe.get_hooks('app_title')[-1]
 
 	email_header, text = get_email_from_template('email_header', {
-		'brand_image': email_brand_image,
-		'brand_text': brand_text
+		'header_title': title,
+		'indicator': indicator
 	})
 
 	return email_header

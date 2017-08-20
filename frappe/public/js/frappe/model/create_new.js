@@ -127,8 +127,10 @@ $.extend(frappe.model, {
 		var user_default = "";
 		var user_permissions = frappe.defaults.get_user_permissions();
 		var meta = frappe.get_meta(doc.doctype);
-		var has_user_permissions = (df.fieldtype==="Link" && user_permissions
-			&& df.ignore_user_permissions != 1 && user_permissions[df.options]);
+		var has_user_permissions = (df.fieldtype==="Link"
+			&& user_permissions
+			&& df.ignore_user_permissions != 1
+			&& user_permissions[df.options]);
 
 		// don't set defaults for "User" link field using User Permissions!
 		if (df.fieldtype==="Link" && df.options!=="User") {
@@ -312,7 +314,7 @@ $.extend(frappe.model, {
 });
 
 frappe.create_routes = {};
-frappe.new_doc = function (doctype, opts) {
+frappe.new_doc = function (doctype, opts, init_callback) {
 	return new Promise(resolve => {
 		if(opts && $.isPlainObject(opts)) {
 			frappe.route_options = opts;
@@ -322,7 +324,7 @@ frappe.new_doc = function (doctype, opts) {
 				frappe.set_route(frappe.create_routes[doctype])
 					.then(() => resolve());
 			} else {
-				frappe.ui.form.make_quick_entry(doctype)
+				frappe.ui.form.make_quick_entry(doctype, null, init_callback)
 					.then(() => resolve());
 			}
 		});

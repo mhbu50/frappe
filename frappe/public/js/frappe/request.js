@@ -8,6 +8,8 @@ frappe.request.url = '/';
 frappe.request.ajax_count = 0;
 frappe.request.waiting_for_ajax = [];
 
+
+
 // generic server call (call page, object)
 frappe.call = function(opts) {
 	if(opts.quiet) {
@@ -158,23 +160,29 @@ frappe.request.call = function(opts) {
 
 	return $.ajax(ajax_args)
 		.done(function(data, textStatus, xhr) {
-			if(typeof data === "string") data = JSON.parse(data);
+			try {
+				if(typeof data === "string") data = JSON.parse(data);
 
-			// sync attached docs
-			if(data.docs || data.docinfo) {
-				frappe.model.sync(data);
+				// sync attached docs
+				if(data.docs || data.docinfo) {
+					frappe.model.sync(data);
+				}
+
+				// sync translated messages
+				if(data.__messages) {
+					$.extend(frappe._messages, data.__messages);
+				}
+
+				// callbacks
+				var status_code_handler = statusCode[xhr.statusCode().status];
+				if (status_code_handler) {
+					status_code_handler(data, xhr);
+				}
+			} catch(e) {
+				console.log("Unable to handle success response"); // eslint-disable-line
+				console.trace(e); // eslint-disable-line
 			}
 
-			// sync translated messages
-			if(data.__messages) {
-				$.extend(frappe._messages, data.__messages);
-			}
-
-			// callbacks
-			var status_code_handler = statusCode[xhr.statusCode().status];
-			if (status_code_handler) {
-				status_code_handler(data, xhr);
-			}
 		})
 		.always(function(data, textStatus, xhr) {
 			try {
@@ -195,20 +203,23 @@ frappe.request.call = function(opts) {
 			}
 		})
 		.fail(function(xhr, textStatus) {
-			var status_code_handler = statusCode[xhr.statusCode().status];
-			if (status_code_handler) {
-				status_code_handler(xhr);
-			} else {
-				// if not handled by error handler!
-				opts.error_callback && opts.error_callback(xhr);
+			try {
+				var status_code_handler = statusCode[xhr.statusCode().status];
+				if (status_code_handler) {
+					status_code_handler(xhr);
+				} else {
+					// if not handled by error handler!
+					opts.error_callback && opts.error_callback(xhr);
+				}
+			} catch(e) {
+				console.log("Unable to handle failed response"); // eslint-disable-line
+				console.trace(e); // eslint-disable-line
 			}
 		});
 }
 
 // call execute serverside request
 frappe.request.prepare = function(opts) {
-	frappe.request.ajax_count++;
-
 	$("body").attr("data-ajax-state", "triggered");
 
 	// btn indicator
@@ -248,61 +259,51 @@ frappe.request.cleanup = function(opts, r) {
 	// un-freeze page
 	if(opts.freeze) frappe.dom.unfreeze();
 
-	if(!r) {
-		return;
-	}
+	if(r) {
 
-	// session expired? - Guest has no business here!
-	if(r.session_expired || frappe.get_cookie("sid")==="Guest") {
-		frappe.app.handle_session_expired();
-		return;
-	}
+		// session expired? - Guest has no business here!
+		if(r.session_expired || frappe.get_cookie("sid")==="Guest") {
+			frappe.app.handle_session_expired();
+			return;
+		}
 
-	// show messages
-	if(r._server_messages && !opts.silent) {
-		r._server_messages = JSON.parse(r._server_messages);
-		frappe.hide_msgprint();
-		frappe.msgprint(r._server_messages);
-	}
+		// show messages
+		if(r._server_messages && !opts.silent) {
+			r._server_messages = JSON.parse(r._server_messages);
+			frappe.hide_msgprint();
+			frappe.msgprint(r._server_messages);
+		}
 
-	// show errors
-	if(r.exc) {
-		r.exc = JSON.parse(r.exc);
-		if(r.exc instanceof Array) {
-			$.each(r.exc, function(i, v) {
-				if(v) {
-					console.log(v);
-				}
-			})
-		} else {
-			console.log(r.exc);
+		// show errors
+		if(r.exc) {
+			r.exc = JSON.parse(r.exc);
+			if(r.exc instanceof Array) {
+				$.each(r.exc, function(i, v) {
+					if(v) {
+						console.log(v);
+					}
+				})
+			} else {
+				console.log(r.exc);
+			}
+		}
+
+		// debug messages
+		if(r._debug_messages) {
+			if(opts.args) {
+				console.log("======== arguments ========");
+				console.log(opts.args);
+				console.log("========")
+			}
+			$.each(JSON.parse(r._debug_messages), function(i, v) { console.log(v); });
+			console.log("======== response ========");
+			delete r._debug_messages;
+			console.log(r);
+			console.log("========");
 		}
 	}
-
-	// debug messages
-	if(r._debug_messages) {
-		if(opts.args) {
-			console.log("======== arguments ========");
-			console.log(opts.args);
-			console.log("========")
-		}
-		$.each(JSON.parse(r._debug_messages), function(i, v) { console.log(v); });
-		console.log("======== response ========");
-		delete r._debug_messages;
-		console.log(r);
-		console.log("========");
-	}
-
 
 	frappe.last_response = r;
-
-	frappe.request.ajax_count--;
-	if(!frappe.request.ajax_count) {
-		$.each(frappe.request.waiting_for_ajax || [], function(i, fn) {
-			fn();
-		});
-		frappe.request.waiting_for_ajax = [];
-	}
 }
 
 frappe.after_server_call = () => {
@@ -404,3 +405,17 @@ frappe.request.cleanup_request_opts = function(request_opts) {
 	}
 	return request_opts;
 };
+
+$(document).ajaxSend(function() {
+	frappe.request.ajax_count++;
+});
+
+$(document).ajaxComplete(function() {
+	frappe.request.ajax_count--;
+	if(!frappe.request.ajax_count) {
+		$.each(frappe.request.waiting_for_ajax || [], function(i, fn) {
+			fn();
+		});
+		frappe.request.waiting_for_ajax = [];
+	}
+});
