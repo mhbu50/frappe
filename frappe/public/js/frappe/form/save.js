@@ -20,7 +20,7 @@ frappe.ui.form.save = function (frm, action, callback, btn) {
 	var save = function () {
 		check_name(function () {
 			$(frm.wrapper).addClass('validated-form');
-			if (check_mandatory()) {
+			if (check_mandatory() && check_length()) {
 				_call({
 					method: "frappe.desk.form.save.savedocs",
 					args: { doc: frm.doc, action: action },
@@ -153,6 +153,63 @@ frappe.ui.form.save = function (frm, action, callback, btn) {
 		return !has_errors;
 	};
 
+	var check_length = function () {
+		var me = this;
+		var has_errors = false;
+		frm.scroll_set = false;
+
+		if (frm.doc.docstatus == 2) return true; // don't check for cancel
+
+		$.each(frappe.model.get_all_docs(frm.doc), function (i, doc) {
+			var error_fields = [];
+			var folded = false;
+
+			$.each(frappe.meta.docfield_list[doc.doctype] || [], function (i, docfield) {
+				if (docfield.fieldname) {
+					var df = frappe.meta.get_docfield(doc.doctype,
+						docfield.fieldname, frm.doc.name);
+
+					if (df.fieldtype === "Fold") {
+						folded = frm.layout.folded;
+					}
+
+					if (df.min_length > 0 && frappe.model.get_value(doc.doctype, doc.name, df.fieldname).length < df.min_length) {
+						has_errors = true;
+						error_fields[error_fields.length] = __(df.label);
+
+						// scroll to field
+						if (!me.scroll_set) {
+							scroll_to(doc.parentfield || df.fieldname);
+						}
+
+						if (folded) {
+							frm.layout.unfold();
+							folded = false;
+						}
+					}
+
+				}
+			});
+			if (error_fields.length) {
+				if (doc.parenttype) {
+					var message = __('Your Input is too short, please write more in table {0}, Row {1}',
+						[__(frappe.meta.docfield_map[doc.parenttype][doc.parentfield].label).bold(), doc.idx]);
+				} else {
+					var message = __('Your Input is too short, please write more in {0}', [__(doc.doctype)]);
+
+				}
+				message = message + '<br><br><ul><li>' + error_fields.join('</li><li>') + "</ul>";
+				frappe.msgprint({
+					message: message,
+					indicator: 'red',
+					title: __('Missing Fields')
+				});
+			}
+		});
+
+		return !has_errors;
+	};
+
 	var scroll_to = function (fieldname) {
 		var f = cur_frm.fields_dict[fieldname];
 		if (f) {
@@ -249,4 +306,3 @@ frappe.ui.form.update_calling_link = (newdoc) => {
 		frappe._from_link = null;
 	}
 }
-

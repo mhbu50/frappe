@@ -119,6 +119,7 @@ frappe.ui.form.Control = Class.extend({
 				() => me.set_model_value(value),
 				() => {
 					me.set_mandatory && me.set_mandatory(value);
+					me.set_length && me.set_length(value);
 
 					if(me.df.change || me.df.onchange) {
 						// onchange event specified in df
@@ -328,6 +329,7 @@ frappe.ui.form.ControlInput = frappe.ui.form.Control.extend({
 			me.set_description();
 			me.set_label();
 			me.set_mandatory(me.value);
+			me.set_length(me.value);
 			me.set_bold();
 		}
 	},
@@ -400,6 +402,18 @@ frappe.ui.form.ControlInput = frappe.ui.form.Control.extend({
 		if(this.disp_area) {
 			$(this.disp_area).toggleClass("bold", !!(this.df.bold || this.df.reqd));
 		}
+	},
+	set_length: function(value) {
+		if(kthis.df.min_length > 0){
+			   this.$wrapper.toggleClass("has-error",true);
+			  if(value){
+					if(value.length < this.df.min_length){
+						this.$wrapper.toggleClass("has-error",true);
+					}
+				}
+		}else {
+			this.$wrapper.toggleClass("has-error",false);
+		}
 	}
 });
 
@@ -418,6 +432,7 @@ frappe.ui.form.ControlData = frappe.ui.form.ControlInput.extend({
 		if (in_list(['Data', 'Link', 'Dynamic Link', 'Password', 'Select', 'Read Only', 'Attach', 'Attach Image'],
 			this.df.fieldtype)) {
 			this.$input.attr("maxlength", this.df.length || 140);
+			this.$input.attr("minlength", this.df.min_length || 0);
 		}
 
 		this.set_input_attributes();
@@ -450,6 +465,7 @@ frappe.ui.form.ControlData = frappe.ui.form.ControlInput.extend({
 		this.set_formatted_input(value);
 		this.set_disp_area(value);
 		this.set_mandatory && this.set_mandatory(value);
+		this.set_length && this.set_length(value);
 	},
 	set_formatted_input: function(value) {
 		this.$input && this.$input.val(this.format_for_input(value));
@@ -1026,6 +1042,7 @@ frappe.ui.form.ControlCheck = frappe.ui.form.ControlData.extend({
 		}
 		this.last_value = value;
 		this.set_mandatory(value);
+		this.set_length(value);
 		this.set_disp_area(value);
 	}
 });
